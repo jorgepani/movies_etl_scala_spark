@@ -1,0 +1,16 @@
+.DS_Store
+.idea/
+target/
+project/project/
+
+.metals
+.bloop
+.vscode
+project/metals.sbt
+.env
+__pycache__
+*.pyc
+*.cython
+.bsp/
+
+.trunk/

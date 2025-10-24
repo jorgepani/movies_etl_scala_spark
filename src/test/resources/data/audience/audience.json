@@ -1,0 +1,23 @@
+[
+  {
+    "title": "Inception",
+    "year": 2010,
+    "audience_avg": 9.1,
+    "audience_count": 1500000,
+    "domestic_gross": 292576195
+  },
+  {
+    "title": "The Dark Knight",
+    "year": 2008,
+    "audience_avg": 9.0,
+    "audience_count": 2500000,
+    "domestic_gross": 535000000
+  },
+  {
+    "title": "Parasite",
+    "year": 2019,
+    "audience_avg": 8.6,
+    "audience_count": 800000,
+    "domestic_gross": 53000000
+  }
+]
