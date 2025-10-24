@@ -83,7 +83,7 @@ object MoviePipeline {
       .join(financialsDF, Seq("unified_title", "year"), "full_outer")
   }
 
-  /** runs the whole ETL
+  /** runs the whole ETL business logic
     * @param inputPath base path for directory data
     */
   def buildUnified(spark: SparkSession, inputPath: String): DataFrame = {

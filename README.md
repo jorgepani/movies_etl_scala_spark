@@ -1,8 +1,10 @@
 # Movies ETL — Scala + Spark
 
 Example ETL pipeline in Scala + Apache Spark. It reads data from 3 providers (CSV/JSON), normalizes join keys, performs joins, and writes Parquet partitioned by year. Includes tests and an example DAG for Airflow (using SparkSubmitOperator).
+
 I decided to use Scala because it's the base framework for databricks and I'm used to it and the test was language agnostic
-To show I'm used to use Python I'll rewrite the code to use Pyspark, Pandas and argparse
+
+To show I'm used to use Python I'll rewrite the code to use Pyspark, Pandas and argparse in another repo
 
 ## Requisites
 - Java 11+
