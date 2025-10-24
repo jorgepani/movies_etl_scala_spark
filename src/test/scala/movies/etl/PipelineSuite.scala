@@ -29,16 +29,12 @@ class PipelineSuite extends FunSuite {
     val inceptionRow =
       df.filter($"unified_title" === "inception" and $"year" === 2010).head()
 
-    // 4. Verificar Mapeo y Tipado del conteo de audiencia (el valor real de tu JSON)
-    // El valor 1,200,000L es el valor que encontramos en tu JSON real para 'Inception'.
     assertEquals(
       inceptionRow.getAs[Long]("total_audience_ratings"),
       1500000L,
       "Ratings must match JSON data and be mapped to total_audience_ratings."
     )
 
-    // 5. Verificar Mapeo y Tipado del gross (el valor real de tu JSON)
-    // domestic_gross en el JSON debe ser mapeado a domestic_gross_p2
     assertEquals(
       inceptionRow.getAs[Long]("domestic_gross_p2"),
       292576195L,
@@ -70,21 +66,17 @@ class PipelineSuite extends FunSuite {
 
     val df = MoviePipeline.processFinancials(spark, inputPath)
 
-    // 1. Verificar Conteo de Filas (Asumiendo 3 registros únicos después de los full_outer joins internos)
     assertEquals(
       df.count(),
       3L,
       "Row count for Provider 3 must be 3 unique movies."
     )
 
-    // 2. Verificar Combianción de Métricas para 'Inception'
     val inceptionRow =
       df.filter($"unified_title" === "inception" and $"year" === 2010).head()
 
     df.show(15)
 
-    // Verificar que los datos de los 3 archivos se unieron correctamente
-    // Nota: El valor de 'domestic_gross_p3' se asume de un archivo de prueba.
     assertEquals(
       inceptionRow.getAs[Long]("domestic_gross_p3"),
       292000000L,
@@ -105,21 +97,12 @@ class PipelineSuite extends FunSuite {
   test(
     "buildUnified should process all providers and produce correct unified view"
   ) {
-    // ASUMO que tienes archivos de prueba en src/test/resources/data/
-
-    val projectRoot = new File(".").getAbsolutePath
-
-    // 2. Construir la ruta completa al directorio de entrada 'data'
-    // El separador de archivos (File.separator) asegura compatibilidad con Windows/Linux
     val inputPath = getInputPath()
 
-    // 1. EJECUCIÓN: Obtener el DataFrame unificado
     val unifiedDF = MoviePipeline.buildUnified(spark, inputPath)
 
     unifiedDF.show(false)
 
-    // 2. VERIFICACIÓN 1: Esquema y Tipo
-    // Se verifica que el esquema del DF final coincida con el case class UnifiedMovie
     val expectedSchema = spark
       .createDataset(
         Seq(
@@ -141,37 +124,28 @@ class PipelineSuite extends FunSuite {
       .schema
     assertEquals(unifiedDF.schema, expectedSchema)
 
-    // 3. VERIFICACIÓN 2: Contenido (Usando la película 'Inception' como ejemplo)
     val inceptionRow = unifiedDF
       .filter($"unified_title" === "inception" and $"year" === 2010)
       .head()
 
-    // Verificar métricas de P1
     assertEquals(inceptionRow.getAs[Int]("critic_score_pct"), 87)
 
-    // Verificar métricas de P2
     assertEquals(inceptionRow.getAs[Long]("total_audience_ratings"), 1500000L)
 
-    // Verificar métricas de P2/P3 (Domestic Gross)
     assertEquals(
       inceptionRow.getAs[Long]("domestic_gross"),
       292576195L
-    ) // Tomado de P2 o P3
+    )
 
-    // Verificar métricas de P3 (International Gross y Budget)
     assertEquals(inceptionRow.getAs[Long]("international_gross"), 535000000L)
     assertEquals(inceptionRow.getAs[Long]("production_budget"), 160000000L)
 
-    // 4. VERIFICACIÓN 3: Conteo total de filas
-    // Asumiendo que los datos de prueba contienen 3 películas únicas
     assertEquals(unifiedDF.count(), 3L)
   }
 
   def getInputPath(): String = {
-    // 1. Obtener la ruta absoluta del directorio base del proyecto
     val projectRoot = System.getProperty("user.dir")
 
-    // 2. Construir la ruta completa al directorio de entrada 'data'
     val inputPath = Seq(
       projectRoot,
       "src",
@@ -180,7 +154,6 @@ class PipelineSuite extends FunSuite {
       "data"
     ).mkString(File.separator)
 
-    // 3. Verificación de existencia para un error claro
     val inputDir = new File(inputPath)
     if (!inputDir.exists() || !inputDir.isDirectory) {
       fail(
