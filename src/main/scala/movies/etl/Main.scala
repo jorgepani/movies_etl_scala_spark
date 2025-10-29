@@ -1,10 +1,11 @@
 package movies.etl
 
+import movies.etl.common.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.col
 import scopt.OParser
 
-object Main {
+object Main extends Logging{
   case class Args(input: String = "data", output: String = "out")
 
   def parseArgs(argv: Array[String]): Args = {
@@ -30,10 +31,13 @@ object Main {
       .config("spark.sql.adaptive.enabled", "true")
       .getOrCreate()
 
+    logger.info(s"Initiated spark session")
+
     val result = MoviePipeline.buildUnified(spark, args.input)
 
     result.show(false) //just for checking
 
+    logger.info(s"Writing results")
     result.repartition(col("year"))
       .write
       .mode("overwrite")

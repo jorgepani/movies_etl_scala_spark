@@ -1,14 +1,17 @@
 package movies.etl
 
+import movies.etl.Main.logger
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import movies.etl.Normalize._
 import movies.etl.RawSchemas._
 import movies.etl.UnifiedColumns._
+import movies.etl.common.Logging
 
-object MoviePipeline {
+object MoviePipeline extends Logging {
 
   def processCriticsProvider(spark: SparkSession, path: String): DataFrame = {
+    logger.info(s"Processing critics provider")
     spark.read
       .option("header", "true")
       .schema(criticsSchema)
@@ -25,23 +28,29 @@ object MoviePipeline {
   }
 
   /** Process Audience Pulse: reads, cleans, and normalizes Provider 2 data.
-   * Uses constants for output column names.
-   */
+    * Uses constants for output column names.
+    */
   def processAudienceProvider(spark: SparkSession, path: String): DataFrame = {
+    logger.info(s"Processing audience provider")
     spark.read
       .schema(audienceSchema)
-      .option("multiline", "true") // usually spark expects an specific json format
+      .option(
+        "multiline",
+        "true"
+      ) // usually spark expects an specific json format
       .json(s"$path/audience/audience.json")
       .select(
         normTitle("title").as(UnifiedTitle),
         toInt("year").as(Year),
         col("audience_avg").as(AudienceAvgScore),
         col("audience_count").as(TotalAudienceRatings),
-        col("domestic_gross").as(DomesticGrossP2) // P2 domestic gross (to be resolved later)
+        col("domestic_gross")
+          .as(DomesticGrossP2) // P2 domestic gross (to be resolved later)
       )
   }
 
   def processFinancials(spark: SparkSession, path: String): DataFrame = {
+    logger.info(s"Processing financials providers")
     // 3a. Domestic
     val domesticDF = spark.read
       .option("header", "true")
@@ -50,7 +59,8 @@ object MoviePipeline {
       .select(
         normTitle("title").as(UnifiedTitle),
         toInt("year").as(Year),
-        col("box_office_gross_usd").as(DomesticGrossP3) // P3 domestic gross (to be resolved later)
+        col("box_office_gross_usd")
+          .as(DomesticGrossP3) // P3 domestic gross (to be resolved later)
       )
 
     // 3b. International
@@ -83,9 +93,11 @@ object MoviePipeline {
   }
 
   /** runs the whole ETL business logic, applying governance and cleanup.
-   * @param inputPath base path for directory data
-   */
+    * @param inputPath base path for directory data
+    */
   def buildUnified(spark: SparkSession, inputPath: String): DataFrame = {
+    logger.info(s"running business logic")
+
     import spark.implicits._
     val p1 = processCriticsProvider(spark, inputPath)
     val p2 = processAudienceProvider(spark, inputPath)
@@ -102,17 +114,27 @@ object MoviePipeline {
         DomesticGross,
         coalesce(col(DomesticGrossP3), col(DomesticGrossP2))
       )
-      .drop(DomesticGrossP2, DomesticGrossP3) // Drop the source-specific columns
+      .drop(
+        DomesticGrossP2,
+        DomesticGrossP3
+      ) // Drop the source-specific columns
 
     // 2. Data Quality / Filtering (Example: Year must be recent/valid)
     val qualityCheckedDF = unifiedGrossDF.filter(
-      col(Year).geq(1888) and // Year must be reasonable (post-invention of cinema)
-        (col(ProductionBudget).isNull or col(ProductionBudget).geq(0)) // Budget must not be negative
+      col(Year).geq(
+        1888
+      ) and // Year must be reasonable (post-invention of cinema)
+        (col(ProductionBudget).isNull or col(ProductionBudget).geq(
+          0
+        )) // Budget must not be negative
     )
 
     // 3. Add Governance Metadata
     qualityCheckedDF
-      .withColumn(IngestionTimestamp, current_timestamp()) // When the pipeline ran
+      .withColumn(
+        IngestionTimestamp,
+        current_timestamp()
+      ) // When the pipeline ran
       .select(
         // Claves
         col(UnifiedTitle),
@@ -128,7 +150,7 @@ object MoviePipeline {
         col(DomesticGross),
         col(InternationalGross),
         col(ProductionBudget),
-        col(MarketingSpend),
+        col(MarketingSpend)
       )
       .as[UnifiedMovie]
       .toDF()

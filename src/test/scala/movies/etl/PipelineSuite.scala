@@ -2,11 +2,14 @@ package movies.etl
 
 import munit.FunSuite
 import org.apache.spark.sql.SparkSession
+import org.apache.logging.log4j.{LogManager, Logger}
 
 import java.io.File
 import scala.concurrent.duration.Duration
 
 class PipelineSuite extends FunSuite {
+
+
 
   override val munitTimeout = Duration(1, "minutes")
 
