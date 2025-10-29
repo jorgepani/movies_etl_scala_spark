@@ -9,6 +9,34 @@ import org.apache.spark.sql.types.{
   IntegerType
 }
 
+object UnifiedColumns {
+  // Claves de Unión
+  val UnifiedTitle = "unified_title"
+  val Year = "year"
+
+  // Métricas Críticas (Proveedor 1)
+  val CriticScorePct = "critic_score_pct"
+  val TopCriticScore = "top_critic_score"
+  val TotalCriticReviews = "total_critic_reviews"
+
+  // Métricas Audiencia (Proveedor 2)
+  val AudienceAvgScore = "audience_avg_score"
+  val TotalAudienceRatings = "total_audience_ratings"
+  val DomesticGrossP2 =
+    "domestic_gross_p2" // Gross del proveedor 2, antes de la unificación
+
+  // Métricas Financieras (Proveedor 3)
+  val DomesticGrossP3 =
+    "domestic_gross_p3" // Gross del proveedor 3, antes de la unificación
+  val InternationalGross = "international_gross"
+  val ProductionBudget = "production_budget"
+  val MarketingSpend = "marketing_spend"
+
+  // Campo Unificado y Metadatos de Gobernanza
+  val DomesticGross = "domestic_gross" // El campo final unificado
+  val IngestionTimestamp = "ingestion_timestamp" // Metadato: Cuándo se procesó
+}
+
 // ensuring we read exactly the types we want
 object RawSchemas {
   // Provider 1: CriticAgg (CSV)
@@ -36,8 +64,8 @@ object RawSchemas {
   // Provider 3: BoxOfficeMetrics
   val boxOfficeSchema: StructType = StructType(
     Array(
-      StructField("film_name", StringType, nullable = true),
-      StructField("year_of_release", StringType, nullable = true),
+      StructField("title", StringType, nullable = true),
+      StructField("year", StringType, nullable = true),
       StructField("box_office_gross_usd", LongType, nullable = true)
     )
   )
@@ -45,10 +73,10 @@ object RawSchemas {
   // Provider 3: Financials
   val provider3FinancialsSchema: StructType = StructType(
     Array(
-      StructField("film_name", StringType, nullable = true),
-      StructField("year_of_release", StringType, nullable = true),
-      StructField("production_budget_usd", LongType, nullable = true),
-      StructField("marketing_spend_usd", LongType, nullable = true)
+      StructField("title", StringType, nullable = true),
+      StructField("year", StringType, nullable = true),
+      StructField("budget", LongType, nullable = true),
+      StructField("marketing", LongType, nullable = true)
     )
   )
 }

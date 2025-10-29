@@ -134,7 +134,7 @@ class PipelineSuite extends FunSuite {
 
     assertEquals(
       inceptionRow.getAs[Long]("domestic_gross"),
-      292576195L
+      292000000L
     )
 
     assertEquals(inceptionRow.getAs[Long]("international_gross"), 535000000L)

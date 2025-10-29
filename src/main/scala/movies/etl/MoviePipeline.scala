@@ -4,45 +4,43 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import movies.etl.Normalize._
 import movies.etl.RawSchemas._
+import movies.etl.UnifiedColumns._
 
 object MoviePipeline {
 
-  /** Process Critics: cleans and normalizes.
-    */
   def processCriticsProvider(spark: SparkSession, path: String): DataFrame = {
     spark.read
       .option("header", "true")
       .schema(criticsSchema)
       .csv(s"$path/critics.csv")
       .select(
-        normTitle("movie_title").as("unified_title"),
-        toInt("release_year").as("year"),
-        col("critic_score_percentage").cast("int").as("critic_score_pct"),
-        col("top_critic_score").cast("double").as("top_critic_score"),
+        normTitle("movie_title").as(UnifiedTitle),
+        toInt("release_year").as(Year),
+        col("critic_score_percentage").cast("int").as(CriticScorePct),
+        col("top_critic_score").cast("double").as(TopCriticScore),
         col("total_critic_reviews_counted")
           .cast("int")
-          .as("total_critic_reviews")
+          .as(TotalCriticReviews)
       )
   }
 
-  /** Process Audience Pulse
-    */
+  /** Process Audience Pulse: reads, cleans, and normalizes Provider 2 data.
+   * Uses constants for output column names.
+   */
   def processAudienceProvider(spark: SparkSession, path: String): DataFrame = {
     spark.read
       .schema(audienceSchema)
-      .option("multiline", "true") //usually spark expects an specific json format
+      .option("multiline", "true") // usually spark expects an specific json format
       .json(s"$path/audience/audience.json")
       .select(
-        normTitle("title").as("unified_title"),
-        toInt("year").as("year"),
-        col("audience_avg").as("audience_avg_score"),
-        col("audience_count").as("total_audience_ratings"),
-        col("domestic_gross").as("domestic_gross_p2")
+        normTitle("title").as(UnifiedTitle),
+        toInt("year").as(Year),
+        col("audience_avg").as(AudienceAvgScore),
+        col("audience_count").as(TotalAudienceRatings),
+        col("domestic_gross").as(DomesticGrossP2) // P2 domestic gross (to be resolved later)
       )
   }
 
-  /** Process BoxOfficeMetrics: reads and joins 3 sources.
-    */
   def processFinancials(spark: SparkSession, path: String): DataFrame = {
     // 3a. Domestic
     val domesticDF = spark.read
@@ -50,9 +48,9 @@ object MoviePipeline {
       .schema(boxOfficeSchema)
       .csv(s"$path/box_domestic.csv")
       .select(
-        normTitle("film_name").as("unified_title"),
-        toInt("year_of_release").as("year"),
-        col("box_office_gross_usd").as("domestic_gross_p3")
+        normTitle("title").as(UnifiedTitle),
+        toInt("year").as(Year),
+        col("box_office_gross_usd").as(DomesticGrossP3) // P3 domestic gross (to be resolved later)
       )
 
     // 3b. International
@@ -61,9 +59,9 @@ object MoviePipeline {
       .schema(boxOfficeSchema)
       .csv(s"$path/box_international.csv")
       .select(
-        normTitle("film_name").as("unified_title"),
-        toInt("year_of_release").as("year"),
-        col("box_office_gross_usd").as("international_gross")
+        normTitle("title").as(UnifiedTitle),
+        toInt("year").as(Year),
+        col("box_office_gross_usd").as(InternationalGross)
       )
 
     // 3c. Finances
@@ -72,56 +70,65 @@ object MoviePipeline {
       .schema(provider3FinancialsSchema)
       .csv(s"$path/financials.csv")
       .select(
-        normTitle("film_name").as("unified_title"),
-        toInt("year_of_release").as("year"),
-        col("production_budget_usd").as("production_budget"),
-        col("marketing_spend_usd").as("marketing_spend")
+        normTitle("title").as(UnifiedTitle),
+        toInt("year").as(Year),
+        col("budget").as(ProductionBudget),
+        col("marketing").as(MarketingSpend)
       )
 
+    // Join the three sub-sources of Provider 3 using the unified keys
     domesticDF
-      .join(internationalDF, Seq("unified_title", "year"), "full_outer")
-      .join(financialsDF, Seq("unified_title", "year"), "full_outer")
+      .join(internationalDF, Seq(UnifiedTitle, Year), "full_outer")
+      .join(financialsDF, Seq(UnifiedTitle, Year), "full_outer")
   }
 
-  /** runs the whole ETL business logic
-    * @param inputPath base path for directory data
-    */
+  /** runs the whole ETL business logic, applying governance and cleanup.
+   * @param inputPath base path for directory data
+   */
   def buildUnified(spark: SparkSession, inputPath: String): DataFrame = {
     import spark.implicits._
     val p1 = processCriticsProvider(spark, inputPath)
     val p2 = processAudienceProvider(spark, inputPath)
     val p3 = processFinancials(spark, inputPath)
 
+    // Join all three main providers
     val combinedDF = p1
-      .join(p2, Seq("unified_title", "year"), "full_outer")
-      .join(p3, Seq("unified_title", "year"), "full_outer") // ¡AÑADIDO p3 aquí!
+      .join(p2, Seq(UnifiedTitle, Year), "full_outer")
+      .join(p3, Seq(UnifiedTitle, Year), "full_outer")
 
+    // 1. Conflict Resolution (Governance): Coalesce P3 first (Box Office pure) over P2 (Audience Pulse)
     val unifiedGrossDF = combinedDF
       .withColumn(
-        "domestic_gross",
-        coalesce(col("domestic_gross_p2"), col("domestic_gross_p3"))
+        DomesticGross,
+        coalesce(col(DomesticGrossP3), col(DomesticGrossP2))
       )
-      .drop(
-        "domestic_gross_p2",
-        "domestic_gross_p3"
-      )
+      .drop(DomesticGrossP2, DomesticGrossP3) // Drop the source-specific columns
 
-    unifiedGrossDF
+    // 2. Data Quality / Filtering (Example: Year must be recent/valid)
+    val qualityCheckedDF = unifiedGrossDF.filter(
+      col(Year).geq(1888) and // Year must be reasonable (post-invention of cinema)
+        (col(ProductionBudget).isNull or col(ProductionBudget).geq(0)) // Budget must not be negative
+    )
+
+    // 3. Add Governance Metadata
+    qualityCheckedDF
+      .withColumn(IngestionTimestamp, current_timestamp()) // When the pipeline ran
       .select(
         // Claves
-        col("unified_title"),
-        col("year"),
+        col(UnifiedTitle),
+        col(Year),
         // P1
-        col("critic_score_pct"),
-        col("top_critic_score"),
-        col("total_critic_reviews"),
+        col(CriticScorePct),
+        col(TopCriticScore),
+        col(TotalCriticReviews),
         // P2
-        col("audience_avg_score"),
-        col("total_audience_ratings"),
-        col("domestic_gross"), // Col unified
-        col("international_gross"),
-        col("production_budget"),
-        col("marketing_spend")
+        col(AudienceAvgScore),
+        col(TotalAudienceRatings),
+        // P3 (Unified & Finance)
+        col(DomesticGross),
+        col(InternationalGross),
+        col(ProductionBudget),
+        col(MarketingSpend),
       )
       .as[UnifiedMovie]
       .toDF()
